@@ -1520,6 +1520,67 @@ void main() {
       expect(find.text('UPDATE NOW'), findsOneWidget);
       expect(find.text('Release Notes'), findsOneWidget);
     });
+
+    /// Regression test for issue #323: the dialog must still show when the
+    /// upgrader is initialized before UpgradeAlert mounts, so UpgradeAlert
+    /// builds with a fresh context. The captured widget context can be
+    /// unmounted by the time the Future.delayed in checkVersion fires; the
+    /// dialog must use the stable navigatorKey context instead of dropping.
+    testWidgets(
+        'test UpgradeAlert with GoRouter shows upgrade dialog with changed context',
+        (WidgetTester tester) async {
+      final client = await MockPlayStoreSearchClient.setupMockClient();
+      final upgrader = Upgrader(
+          upgraderOS: MockUpgraderOS(android: true),
+          client: client,
+          debugLogging: true);
+      upgrader.installPackageInfo(
+          packageInfo: PackageInfo(
+              appName: 'Upgrader',
+              packageName: 'com.testing.test2',
+              version: '1.0.0',
+              buildNumber: '400'));
+      // Initialize the upgrader before mounting UpgradeAlert, so it outlives
+      // the widget's original context (the #323 scenario).
+      await tester.runAsync(() => upgrader.initialize());
+      GoRouter routerConfig = GoRouter(
+        initialLocation: '/page1',
+        routes: [
+          GoRoute(
+            path: '/page1',
+            builder: (BuildContext context, GoRouterState state) => Scaffold(
+                appBar: AppBar(title: const Text('Upgrader GoRouter Example')),
+                body: const Center(child: Text('Checking... page1'))),
+          ),
+        ],
+      );
+
+      final router = MaterialApp.router(
+        title: 'Upgrader GoRouter Example',
+        routerConfig: routerConfig,
+        builder: (context, child) {
+          return UpgradeAlert(
+            upgrader: upgrader,
+            navigatorKey: routerConfig.routerDelegate.navigatorKey,
+            showLater: false,
+            showIgnore: false,
+            child: child,
+          );
+        },
+      );
+
+      await tester.pumpWidget(router);
+
+      // Pump the UI so the upgrade dialog is displayed.
+      await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Upgrader GoRouter Example'), findsOneWidget);
+
+      expect(find.text('Update App?'), findsOneWidget);
+      expect(find.text('UPDATE NOW'), findsOneWidget);
+      expect(find.text('Release Notes'), findsOneWidget);
+    });
   });
 
   test('test UpgraderMessages', () {

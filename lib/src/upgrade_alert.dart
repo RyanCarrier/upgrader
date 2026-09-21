@@ -235,7 +235,15 @@ class UpgradeAlertState extends State<UpgradeAlert> {
       print('upgrader: showTheDialog releaseNotes: $releaseNotes');
     }
 
-    if (!context.mounted) {
+    // Prefer the navigator's context over the captured widget context. The
+    // context passed in comes through a Future.delayed in checkVersion, so by
+    // the time the dialog shows the widget can be gone and its context
+    // unmounted, which silently drops the dialog (issue #323). The
+    // navigatorKey's currentContext is the stable, mounted root context, so
+    // use it whenever a navigatorKey is set.
+    final dialogContext = widget.navigatorKey?.currentContext ?? context;
+
+    if (!dialogContext.mounted) {
       if (widget.upgrader.state.debugLogging) {
         print('upgrader: showTheDialog context not mounted - dialog not shown');
       }
@@ -247,7 +255,7 @@ class UpgradeAlertState extends State<UpgradeAlert> {
 
     // Detect if CupertinoApp is in the widget tree
     final isCupertinoApp =
-        context.findAncestorWidgetOfExactType<CupertinoApp>() != null;
+        dialogContext.findAncestorWidgetOfExactType<CupertinoApp>() != null;
 
     dialogBuilder(BuildContext context) => PopScope(
           canPop: onCanPop(),
@@ -270,13 +278,13 @@ class UpgradeAlertState extends State<UpgradeAlert> {
     if (isCupertinoApp) {
       showCupertinoDialog(
         barrierDismissible: barrierDismissible,
-        context: context,
+        context: dialogContext,
         builder: dialogBuilder,
       );
     } else {
       showDialog(
         barrierDismissible: barrierDismissible,
-        context: context,
+        context: dialogContext,
         builder: dialogBuilder,
       );
     }
